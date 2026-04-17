@@ -29,7 +29,7 @@ Application web de recherche opérationnelle implémentant l'algorithme de Ford 
 1. Cloner le dépôt
 
 ```bash
-git clone https://github.com/votre-utilisateur/fordmin.git
+git clone https://github.com/ndrianja04/ro.git
 cd fordmin
 ```
 
