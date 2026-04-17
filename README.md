@@ -123,4 +123,3 @@ Arrêt de l'application
 ```bash
 docker compose down
 ```
-```
