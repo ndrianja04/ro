@@ -1,0 +1,30 @@
+#version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app  # pour le développement, permet de recharger
+    environment:
+      - FLASK_ENV=development
+    networks:
+      - ford-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - ford-network
+
+networks:
+  ford-network:
+    driver: bridge

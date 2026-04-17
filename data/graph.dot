@@ -1,0 +1,31 @@
+digraph G {
+    // source: A
+    // target: J
+    A; B; C; D; E; F; G; H; I; J;
+
+    A -> B [label="4"];
+    A -> C [label="2"];
+    A -> D [label="7"];
+
+    B -> E [label="3"];
+    B -> F [label="5"];
+
+    C -> F [label="1"];
+    C -> G [label="6"];
+
+    D -> G [label="4"];
+    D -> H [label="8"];
+
+    E -> I [label="2"];
+    E -> J [label="9"];
+
+    F -> I [label="5"];
+    F -> J [label="3"];
+
+    G -> J [label="7"];
+    G -> H [label="2"];
+
+    H -> J [label="4"];
+
+    I -> J [label="1"];
+}

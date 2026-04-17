@@ -1,0 +1,26 @@
+{
+  "source": "X1",
+  "target": "X16",
+  "arcs": [
+    {"from": "X1", "to": "X2", "weight": 10},
+    {"from": "X2", "to": "X3", "weight": 15},
+    {"from": "X2", "to": "X4", "weight": 8},
+    {"from": "X3", "to": "X6", "weight": 1},
+    {"from": "X3", "to": "X11", "weight": 16},
+    {"from": "X4", "to": "X5", "weight": 6},
+    {"from": "X5", "to": "X9", "weight": 1},
+    {"from": "X6", "to": "X7", "weight": 4},
+    {"from": "X7", "to": "X8", "weight": 1},
+    {"from": "X7", "to": "X11", "weight": 8},
+    {"from": "X8", "to": "X10", "weight": 2},
+    {"from": "X9", "to": "X8", "weight": 3},
+    {"from": "X9", "to": "X10", "weight": 4},
+    {"from": "X10", "to": "X12", "weight": 7},
+    {"from": "X11", "to": "X13", "weight": 12},
+    {"from": "X12", "to": "X15", "weight": 9},
+    {"from": "X13", "to": "X14", "weight": 3},
+    {"from": "X14", "to": "X16", "weight": 3},
+    {"from": "X15", "to": "X14", "weight": 5},
+    {"from": "X15", "to": "X16", "weight": 6}
+  ]
+}
