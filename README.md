@@ -1,5 +1,4 @@
 
-```markdown
 # Fordmin - Algorithme de Ford pour le plus court chemin
 
 Application web de recherche opérationnelle implémentant l'algorithme de Ford (minimisation) pour trouver le plus court chemin dans un graphe orienté pondéré.
