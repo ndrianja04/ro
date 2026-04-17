@@ -1,4 +1,3 @@
-Voici un fichier README.md prêt à être utilisé pour votre dépôt GitHub. Il contient les instructions d'installation, de lancement et d'utilisation.
 
 ```markdown
 # Fordmin - Algorithme de Ford pour le plus court chemin
