@@ -9,7 +9,7 @@ Application web de recherche opérationnelle implémentant l'algorithme de Ford 
 - Détection des cycles absorbants
 - Affichage de tous les chemins optimaux (si multiples)
 - Visualisation interactive du graphe avec Cytoscape.js
-- Import/Export de graphes aux formats JSON et DOT
+- Import/Export de graphes au format Excel
 - Exemples intégrés
 - Interface responsive
 
@@ -53,26 +53,6 @@ Saisie manuelle d'un graphe
 3. Pour chaque arc, indiquer : départ, arrivée, poids
 4. Cliquer sur Calculer le chemin
 
-Import d'un graphe
-
-· Format JSON : structure identique à l'export
-· Format DOT : syntaxe Graphviz (exemple ci-dessous)
-
-```dot
-digraph G {
-    // source: A
-    // target: D
-    A -> B [label="5"];
-    A -> C [label="2"];
-    B -> D [label="1"];
-    C -> D [label="4"];
-}
-```
-
-Export
-
-· Exporter le graphe courant au format JSON ou DOT
-· Personnaliser le nom du fichier avant export
 
 Exemples intégrés
 
@@ -103,19 +83,6 @@ Structure du projet
 ├── Dockerfile.backend
 ├── Dockerfile.frontend
 └── docker-compose.yml
-```
-
-Format des données JSON
-
-```json
-{
-  "source": "X1",
-  "target": "X16",
-  "arcs": [
-    {"from": "X1", "to": "X2", "weight": 10},
-    {"from": "X2", "to": "X3", "weight": 15}
-  ]
-}
 ```
 
 Arrêt de l'application
