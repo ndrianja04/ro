@@ -215,22 +215,15 @@ async function solve() {
             return;
         }
 
-        let resultText = `Distances minimales depuis ${source} :\n`;
         const distances = data.distances;
+
+        let resultText = `Distances minimales depuis ${source} :\n`;
         const sortedKeys = Object.keys(distances).sort((a, b) => {
-            // Extrait le nombre à la fin du nom (ex: "X10" -> 10, "A" -> null)
-            const matchA = a.match(/(\d+)$/);
-            const matchB = b.match(/(\d+)$/);
-            if (matchA && matchB) {
-                const numA = parseInt(matchA[1], 10);
-                const numB = parseInt(matchB[1], 10);
-                if (numA !== numB) return numA - numB;
-                // Si mêmes nombres, comparer la partie texte avant
-                const textA = a.slice(0, matchA.index);
-                const textB = b.slice(0, matchB.index);
-                return textA.localeCompare(textB);
+            const numA = parseInt(a.match(/\d+$/)?.[0] || a);
+            const numB = parseInt(b.match(/\d+$/)?.[0] || b);
+            if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+                return numA - numB;
             }
-            // Si l'un des deux n'a pas de nombre, tri alphabétique classique
             return a.localeCompare(b);
         });
         for (const v of sortedKeys) {
@@ -255,147 +248,81 @@ async function solve() {
     }
 }
 
-// ---------- Export JSON avec nom personnalisé ----------
-function exportToJSON() {
+// ---------- Export Excel ----------
+function exportToExcel() {
     const source = document.getElementById('source').value.trim();
     const target = document.getElementById('target').value.trim();
-    let baseFilename = document.getElementById('export-filename').value.trim();
-    if (!baseFilename) baseFilename = 'graphe';
-    const filename = baseFilename.endsWith('.json') ? baseFilename : baseFilename + '.json';
-
     const validArcs = arcs.filter(a => a.from && a.to && a.weight !== undefined && a.from.trim() !== '' && a.to.trim() !== '');
-    const graphData = {
-        source: source,
-        target: target,
-        arcs: validArcs.map(a => ({ from: a.from.trim(), to: a.to.trim(), weight: a.weight }))
-    };
-    const dataStr = JSON.stringify(graphData, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-}
 
-// ---------- Export DOT ----------
-function exportToDOT() {
-    const source = document.getElementById('source').value.trim();
-    const target = document.getElementById('target').value.trim();
-    let baseFilename = document.getElementById('export-filename').value.trim();
-    if (!baseFilename) baseFilename = 'graphe';
-    const filename = baseFilename.endsWith('.dot') ? baseFilename : baseFilename + '.dot';
-
-    const validArcs = arcs.filter(a => a.from && a.to && a.weight !== undefined && a.from.trim() !== '' && a.to.trim() !== '');
     if (validArcs.length === 0) {
-        alert("Aucun arc à exporter.");
+        alert("Aucun arc valide à exporter. Veuillez ajouter des arcs avant d'exporter.");
         return;
     }
 
-    let dot = 'digraph G {\n';
-    if (source) dot += `    // source: ${source}\n`;
-        if (target) dot += `    // target: ${target}\n`;
-            dot += '    // noeuds (optionnel, pour lisibilité)\n';
-            const nodes = new Set();
-            validArcs.forEach(a => { nodes.add(a.from); nodes.add(a.to); });
-            nodes.forEach(n => { dot += `    ${n};\n`; });
-            dot += '\n    // arcs\n';
-            validArcs.forEach(a => {
-                dot += `    ${a.from} -> ${a.to} [label="${a.weight}"];\n`;
-            });
-            dot += '}\n';
+    const data = [];
+    data.push(["Départ", source]);
+    data.push(["Arrivée", target]);
+    data.push([]);
+    data.push(["De", "Vers", "Poids"]);
+    validArcs.forEach(arc => {
+        data.push([arc.from.trim(), arc.to.trim(), arc.weight]);
+    });
 
-            const blob = new Blob([dot], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.click();
-            URL.revokeObjectURL(url);
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Graphe");
+    XLSX.writeFile(wb, "graphe.xlsx");
 }
 
-// ---------- Import JSON ----------
-function importFromJSON(file) {
+// ---------- Import Excel ----------
+function importFromExcel(file) {
     const reader = new FileReader();
     reader.onload = function(e) {
-        try {
-            const data = JSON.parse(e.target.result);
-            if (data.source !== undefined) document.getElementById('source').value = data.source;
-            if (data.target !== undefined) document.getElementById('target').value = data.target;
-            if (data.arcs && Array.isArray(data.arcs)) {
-                arcs = data.arcs.map(a => ({
-                    from: a.from || '',
-                    to: a.to || '',
-                    weight: a.weight !== undefined ? a.weight : 1
-                }));
-                updateTable();
-                updateGraphVisualization();
-                document.getElementById('result').innerText = 'Graphe importé. Cliquez sur "Calculer le chemin".';
-                currentPaths = [];
-            } else {
-                alert("Le fichier JSON ne contient pas de liste d'arcs valide.");
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
+
+        let source = null;
+        let target = null;
+        const arcsData = [];
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || row.length < 2) continue;
+            const firstCell = (row[0] || "").toString().trim();
+            if (firstCell === "Départ") {
+                source = (row[1] || "").toString().trim();
+            } else if (firstCell === "Arrivée") {
+                target = (row[1] || "").toString().trim();
+            } else if (firstCell === "De") {
+                for (let j = i+1; j < rows.length; j++) {
+                    const arcRow = rows[j];
+                    if (!arcRow || arcRow.length < 3) continue;
+                    const from = (arcRow[0] || "").toString().trim();
+                    const to = (arcRow[1] || "").toString().trim();
+                    const weight = parseFloat(arcRow[2]);
+                    if (from !== "" && to !== "" && !isNaN(weight)) {
+                        arcsData.push({ from, to, weight });
+                    }
+                }
+                break;
             }
-        } catch(err) {
-            alert("Erreur de lecture du fichier JSON : " + err.message);
+        }
+
+        if (source) document.getElementById('source').value = source;
+        if (target) document.getElementById('target').value = target;
+        if (arcsData.length > 0) {
+            arcs = arcsData;
+            updateTable();
+            updateGraphVisualization();
+            document.getElementById('result').innerText = 'Graphe importé. Cliquez sur "Calculer le chemin".';
+            currentPaths = [];
+        } else {
+            alert("Aucun arc valide trouvé dans le fichier Excel.");
         }
     };
-    reader.readAsText(file);
-}
-
-// ---------- Import DOT amélioré ----------
-function importFromDOT(file) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const dotContent = e.target.result;
-            const parsed = parseDot(dotContent);
-            if (parsed.source) document.getElementById('source').value = parsed.source;
-            if (parsed.target) document.getElementById('target').value = parsed.target;
-            if (parsed.arcs.length > 0) {
-                arcs = parsed.arcs;
-                updateTable();
-                updateGraphVisualization();
-                document.getElementById('result').innerText = 'Graphe DOT importé. Cliquez sur "Calculer le chemin".';
-                currentPaths = [];
-            } else {
-                alert("Aucun arc trouvé dans le fichier DOT.");
-            }
-        } catch(err) {
-            alert("Erreur de lecture du fichier DOT : " + err.message);
-        }
-    };
-    reader.readAsText(file);
-}
-
-function parseDot(dotContent) {
-    const lines = dotContent.split(/\r?\n/);
-    let source = null;
-    let target = null;
-    const arcs = [];
-
-    // Expression régulière pour capturer les arcs : from -> to [label="..."] ou [weight=...]
-    // Accepte les espaces, les points-virgules, les guillemets simples ou doubles.
-    const edgeRegex = /^\s*([a-zA-Z0-9_]+)\s*->\s*([a-zA-Z0-9_]+)\s*\[.*?(?:label|weight)\s*=\s*["']?(\d+(?:\.\d+)?)["']?.*\]\s*;?\s*$/;
-
-    for (let line of lines) {
-        // Commentaires pour source et target
-        const sourceMatch = line.match(/\/\/\s*source:\s*([a-zA-Z0-9_]+)/i);
-        if (sourceMatch) source = sourceMatch[1];
-        const targetMatch = line.match(/\/\/\s*target:\s*([a-zA-Z0-9_]+)/i);
-        if (targetMatch) target = targetMatch[1];
-
-        const match = line.match(edgeRegex);
-        if (match) {
-            const from = match[1];
-            const to = match[2];
-            const weight = parseFloat(match[3]);
-            arcs.push({ from, to, weight });
-        }
-    }
-
-    // Si source ou target non trouvés, on laisse l'utilisateur les saisir (pas d'alerte)
-    return { source, target, arcs };
+    reader.readAsArrayBuffer(file);
 }
 
 // ---------- Exemples prédéfinis ----------
@@ -500,17 +427,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('source').addEventListener('change', () => updateGraphVisualization());
     document.getElementById('target').addEventListener('change', () => updateGraphVisualization());
 
-    // Import/Export
-    document.getElementById('export-json').onclick = exportToJSON;
-    document.getElementById('import-file').onchange = (e) => {
-        if (e.target.files.length > 0) importFromJSON(e.target.files[0]);
+    // Excel import/export
+    document.getElementById('export-excel').onclick = exportToExcel;
+    document.getElementById('import-excel').onchange = (e) => {
+        if (e.target.files.length > 0) importFromExcel(e.target.files[0]);
         e.target.value = '';
     };
-    document.getElementById('import-dot').onchange = (e) => {
-        if (e.target.files.length > 0) importFromDOT(e.target.files[0]);
-        e.target.value = '';
-    };
-    document.getElementById('export-dot').onclick = exportToDOT;
     document.getElementById('load-graph1').onclick = () => loadExample('graph1');
     document.getElementById('load-graph2').onclick = () => loadExample('graph2');
 });
