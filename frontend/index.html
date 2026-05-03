@@ -3,48 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Algorithme de Ford – Plus court chemin</title>
+    <title>Fordmin – Plus court chemin</title>
     <link rel="stylesheet" href="style.css">
     <script src="lib/cytoscape.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-<div class="app-container">
-    <aside class="sidebar">
+<div class="app">
+    <div class="sidebar">
         <div class="sidebar-header">
             <h1>Ford<span>min</span></h1>
-            <p class="sub">Algorithme de minimisation</p>
+            <p class="subtitle">Algorithme de Ford (minimisation)</p>
         </div>
 
-        <!-- Source / Cible -->
-        <div class="control-group">
-            <label>Sommet de départ</label>
-            <input type="text" id="source" placeholder="ex: A, 1, x1" class="input-field">
+        <div class="field-group">
+            <label>Départ</label>
+            <input type="text" id="source" placeholder="ex: A, X1" class="field">
         </div>
-        <div class="control-group">
-            <label>Sommet d'arrivée</label>
-            <input type="text" id="target" placeholder="ex: P, 15, x16" class="input-field">
+        <div class="field-group">
+            <label>Arrivée</label>
+            <input type="text" id="target" placeholder="ex: Z, X16" class="field">
         </div>
 
-        <!-- Import et exemples -->
-        <div class="control-group">
+        <div class="section">
             <div class="section-title">Importer un graphe</div>
-            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                <label for="import-file" class="btn-secondary" style="flex:1; text-align: center; cursor: pointer;">JSON</label>
-                <input type="file" id="import-file" accept=".json" style="display: none;">
-                <label for="import-dot" class="btn-secondary" style="flex:1; text-align: center; cursor: pointer;">DOT</label>
-                <input type="file" id="import-dot" accept=".dot" style="display: none;">
+            <div class="button-row">
+                <label class="btn btn-outline" for="import-excel">Importer Excel</label>
+                <input type="file" id="import-excel" accept=".xlsx, .xls" hidden>
             </div>
-            <div style="display: flex; gap: 10px;">
-                <button id="load-graph1" class="btn-secondary" style="flex:1;">Exemple 1</button>
-                <button id="load-graph2" class="btn-secondary" style="flex:1;">Exemple 2</button>
+            <div class="button-row">
+                <button class="btn btn-outline" id="load-graph1">Exemple 1 (X1→X16)</button>
+                <button class="btn btn-outline" id="load-graph2">Exemple 2 (A→D)</button>
             </div>
         </div>
 
-        <!-- Arcs -->
-        <div class="control-group">
+        <div class="section">
             <div class="section-title">
                 <span>Arcs du graphe</span>
-                <button id="add-edge" class="btn-icon" title="Ajouter un arc">+</button>
+                <button class="btn-icon" id="add-edge" title="Ajouter un arc">+</button>
             </div>
             <div class="edges-table-wrapper">
                 <table id="edges-table">
@@ -56,51 +52,42 @@
             </div>
         </div>
 
-        <!-- Actions -->
-        <div class="action-buttons">
-            <button id="solve-btn" class="btn-primary">Calculer le chemin</button>
-            <button id="clear-graph" class="btn-secondary">Effacer tout</button>
+        <div class="button-row">
+            <button class="btn btn-primary" id="solve-btn">Calculer le chemin</button>
+            <button class="btn btn-secondary" id="clear-graph">Effacer tout</button>
         </div>
 
-        <!-- Résultats -->
         <div class="result-panel">
             <div class="result-header">
                 <span>Résultats</span>
-                <button id="copy-result" class="btn-copy" title="Copier">Copier</button>
+                <button class="btn-copy" id="copy-result" title="Copier">📋</button>
             </div>
-            <pre id="result">Aucun calcul effectué.</pre>
+            <pre id="result" data-placeholder="Aucun calcul effectué."></pre>
+
         </div>
 
-        <!-- Export -->
-        <div class="control-group">
+        <div class="section">
             <div class="section-title">Exporter le graphe</div>
-            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                <button id="export-json" class="btn-secondary" style="flex:1;">JSON</button>
-                <button id="export-dot" class="btn-secondary" style="flex:1;">DOT</button>
-            </div>
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <label style="font-size:0.7rem; flex:1;">Nom du fichier:</label>
-                <input type="text" id="export-filename" value="graphe" style="flex:1; padding:4px; font-size:0.7rem; border-radius:6px; border:1px solid #ccc;">
-            </div>
+            <button class="btn btn-outline" id="export-excel">Exporter Excel</button>
         </div>
-    </aside>
+    </div>
 
-    <main class="graph-container">
+    <div class="graph-area">
         <div class="graph-toolbar">
             <span>Graphe orienté</span>
-            <div class="toolbar-actions">
-                <button id="fit-graph" class="tool-btn">Ajuster la vue</button>
-                <button id="reset-layout" class="tool-btn">Réinitialiser layout</button>
+            <div>
+                <button class="tool-btn" id="fit-graph">Ajuster la vue</button>
+                <button class="tool-btn" id="reset-layout">Réinitialiser layout</button>
             </div>
         </div>
         <div id="cy" class="cy-view"></div>
-        <div class="graph-legend">
-            <span><span class="legend-color" style="background:#6c5ce7;"></span> Nœud standard</span>
-            <span><span class="legend-color" style="background:#00b894;"></span> Départ</span>
-            <span><span class="legend-color" style="background:#d63031;"></span> Arrivée</span>
-            <span><span class="legend-color" style="background:#fdcb6e;"></span> Arc du chemin optimal</span>
+        <div class="legend">
+            <span><span class="legend-dot" style="background:#6c5ce7;"></span> Nœud</span>
+            <span><span class="legend-dot" style="background:#00b894;"></span> Départ</span>
+            <span><span class="legend-dot" style="background:#d63031;"></span> Arrivée</span>
+            <span><span class="legend-dot" style="background:#fdcb6e;"></span> Chemin optimal</span>
         </div>
-    </main>
+    </div>
 </div>
 
 <script src="script.js"></script>
