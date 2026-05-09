@@ -412,6 +412,57 @@ box-shadow: 0 0 0 3px var(--primary-100);
 }
 
 /* ============================================
+ *  LISTE DES SOMMETS (AJOUT)
+ *  ============================================ */
+.vertices-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+    max-height: 160px;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+.vertex-item {
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    padding: 4px 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--gray-700);
+    border: 1px solid var(--gray-200);
+    transition: all var(--transition-fast);
+}
+
+.vertex-item:hover {
+    background: var(--gray-200);
+    border-color: var(--gray-300);
+    transform: translateY(-1px);
+}
+
+.delete-vertex-btn {
+    background: none;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: bold;
+    padding: 0 4px;
+    transition: all var(--transition-fast);
+    border-radius: var(--radius-full);
+}
+
+.delete-vertex-btn:hover {
+    color: white;
+    background: var(--danger);
+    transform: scale(1.1);
+}
+
+/* ============================================
  *  PANNEAU DE RÉSULTATS
  *  ============================================ */
 .result-panel {

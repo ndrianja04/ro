@@ -2,6 +2,7 @@
 let arcs = [];
 let cy = null;
 let currentPaths = [];
+let solveTimeout = null;          // pour le debounce
 
 // ---------- Fonctions de mise à jour du tableau HTML ----------
 function updateTable() {
@@ -14,7 +15,7 @@ function updateTable() {
         row.insertCell(2).innerHTML = `<input type="number" value="${arc.weight}" data-index="${idx}" data-field="weight" step="any" class="edge-input">`;
         const delCell = row.insertCell(3);
         const delBtn = document.createElement('button');
-        delBtn.textContent = '✖';
+        delBtn.textContent = 'X';
         delBtn.className = 'delete-edge-btn';
         delBtn.style.background = '#fee2e2';
         delBtn.style.border = 'none';
@@ -25,6 +26,7 @@ function updateTable() {
             arcs.splice(idx, 1);
             updateTable();
             updateGraphVisualization();
+            autoSolve();              // auto-recalcul
         };
         delCell.appendChild(delBtn);
     });
@@ -58,6 +60,54 @@ function handleInputChange(e) {
     }
     arcs[idx][field] = value;
     updateGraphVisualization();
+    autoSolve();                     // auto-recalcul
+}
+
+// ---------- Gestion de la liste des sommets ----------
+function updateVerticesList() {
+    const verticesSet = new Set();
+    arcs.forEach(arc => {
+        if (arc.from && arc.from.trim()) verticesSet.add(arc.from.trim());
+        if (arc.to && arc.to.trim()) verticesSet.add(arc.to.trim());
+    });
+        const vertices = Array.from(verticesSet).sort((a, b) => {
+            const numA = parseInt(a.match(/\d+$/)?.[0] || a);
+            const numB = parseInt(b.match(/\d+$/)?.[0] || b);
+            if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+                return numA - numB;
+            }
+            return a.localeCompare(b);
+        });
+        const container = document.getElementById('vertices-list');
+        if (!container) return;
+        container.innerHTML = '';
+    vertices.forEach(v => {
+        const div = document.createElement('div');
+        div.className = 'vertex-item';
+        div.innerHTML = `${v} <button class="delete-vertex-btn" data-vertex="${v}">x</button>`;
+        container.appendChild(div);
+    });
+    document.querySelectorAll('.delete-vertex-btn').forEach(btn => {
+        btn.removeEventListener('click', handleDeleteVertex);
+        btn.addEventListener('click', handleDeleteVertex);
+    });
+}
+
+function handleDeleteVertex(e) {
+    const vertex = e.currentTarget.getAttribute('data-vertex');
+    if (!vertex) return;
+    if (confirm(`Supprimer le sommet "${vertex}" et tous les arcs associés ?`)) {
+        arcs = arcs.filter(arc => arc.from !== vertex && arc.to !== vertex);
+        const sourceInput = document.getElementById('source');
+        const targetInput = document.getElementById('target');
+        if (sourceInput.value === vertex) sourceInput.value = '';
+        if (targetInput.value === vertex) targetInput.value = '';
+        updateTable();
+        updateGraphVisualization();
+        currentPaths = [];
+        document.getElementById('result').innerText = 'Graphe modifié. Recalcul en cours...';
+        autoSolve();                     // auto-recalcul
+    }
 }
 
 // ---------- Visualisation avec Cytoscape ----------
@@ -100,25 +150,25 @@ function initCytoscape() {
                 selector: 'node.source',
                 style: {
                     'background-color': '#00b894',
-                   'border-color': '#fff',
-                   'border-width': 3
+                    'border-color': '#fff',
+                    'border-width': 3
                 }
             },
             {
                 selector: 'node.target',
                 style: {
                     'background-color': '#d63031',
-                   'border-color': '#fff',
-                   'border-width': 3
+                    'border-color': '#fff',
+                    'border-width': 3
                 }
             },
             {
                 selector: 'edge.optimal',
                 style: {
                     'line-color': '#fdcb6e',
-                   'target-arrow-color': '#fdcb6e',
-                   'width': 4,
-                   'opacity': 1
+                    'target-arrow-color': '#fdcb6e',
+                    'width': 4,
+                    'opacity': 1
                 }
             }
         ],
@@ -169,6 +219,8 @@ function updateGraphVisualization() {
         if (currentPaths.length > 0) {
             highlightPaths(currentPaths);
         }
+
+        updateVerticesList();   // mise à jour de la liste des sommets
 }
 
 function highlightPaths(paths) {
@@ -184,21 +236,31 @@ function highlightPaths(paths) {
     }
 }
 
-// ---------- Appel API ----------
+// ---------- Auto-recalcul (debounce) ----------
+function autoSolve() {
+    if (solveTimeout) clearTimeout(solveTimeout);
+    solveTimeout = setTimeout(() => {
+        solve();
+        solveTimeout = null;
+    }, 300);
+}
+
+// ---------- Appel API (calcul du plus court chemin) ----------
 async function solve() {
     const source = document.getElementById('source').value.trim();
     const target = document.getElementById('target').value.trim();
     if (!source || !target) {
-        alert("Veuillez renseigner les sommets de départ et d'arrivée.");
+        // On n'affiche pas d'alerte en auto, on efface juste le résultat
+        document.getElementById('result').innerText = 'Veuillez renseigner départ et arrivée.';
         return;
     }
     if (arcs.length === 0) {
-        alert("Ajoutez au moins un arc.");
+        document.getElementById('result').innerText = 'Aucun arc. Ajoutez des arcs.';
         return;
     }
     const validArcs = arcs.filter(a => a.from && a.to && a.weight !== undefined && a.from.trim() !== '' && a.to.trim() !== '');
     if (validArcs.length === 0) {
-        alert("Aucun arc valide.");
+        document.getElementById('result').innerText = 'Aucun arc valide.';
         return;
     }
 
@@ -316,8 +378,9 @@ function importFromExcel(file) {
             arcs = arcsData;
             updateTable();
             updateGraphVisualization();
-            document.getElementById('result').innerText = 'Graphe importé. Cliquez sur "Calculer le chemin".';
+            document.getElementById('result').innerText = 'Graphe importé. Calcul automatique...';
             currentPaths = [];
+            autoSolve();                     // auto-recalcul
         } else {
             alert("Aucun arc valide trouvé dans le fichier Excel.");
         }
@@ -375,8 +438,9 @@ function loadExample(exampleName) {
     arcs = graphData.arcs.map(a => ({ from: a.from, to: a.to, weight: a.weight }));
     updateTable();
     updateGraphVisualization();
-    document.getElementById('result').innerText = `Exemple ${exampleName === 'graph1' ? '1' : '2'} chargé. Cliquez sur "Calculer le chemin".`;
+    document.getElementById('result').innerText = `Exemple ${exampleName === 'graph1' ? '1' : '2'} chargé. Calcul automatique...`;
     currentPaths = [];
+    autoSolve();                     // auto-recalcul
 }
 
 // ---------- Utilitaires ----------
@@ -390,6 +454,7 @@ function clearAll() {
     document.getElementById('source').value = '';
     document.getElementById('target').value = '';
     document.getElementById('result').innerText = 'Aucun calcul effectué.';
+    updateVerticesList(); // vide la liste
 }
 
 function copyResult() {
@@ -412,8 +477,8 @@ document.addEventListener('DOMContentLoaded', () => {
         arcs.push({ from: '', to: '', weight: 1 });
         updateTable();
         updateGraphVisualization();
+        autoSolve();                     // auto-recalcul
     };
-    document.getElementById('solve-btn').onclick = solve;
     document.getElementById('clear-graph').onclick = clearAll;
     document.getElementById('fit-graph').onclick = () => cy && cy.fit();
     document.getElementById('reset-layout').onclick = () => {
@@ -424,10 +489,16 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     document.getElementById('copy-result').onclick = copyResult;
 
-    document.getElementById('source').addEventListener('change', () => updateGraphVisualization());
-    document.getElementById('target').addEventListener('change', () => updateGraphVisualization());
+    // Événements source / target avec auto-recalcul
+    document.getElementById('source').addEventListener('change', () => {
+        updateGraphVisualization();
+        autoSolve();
+    });
+    document.getElementById('target').addEventListener('change', () => {
+        updateGraphVisualization();
+        autoSolve();
+    });
 
-    // Excel import/export
     document.getElementById('export-excel').onclick = exportToExcel;
     document.getElementById('import-excel').onchange = (e) => {
         if (e.target.files.length > 0) importFromExcel(e.target.files[0]);
