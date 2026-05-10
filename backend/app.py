@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from ford import ford_minimisation
+from ford import ford_minimisation, ford_maximisation
 
 app = Flask(__name__)
 
@@ -12,11 +12,14 @@ def solve():
     source = data.get('source')
     target = data.get('target')
     arcs = data.get('arcs', [])
+    mode = data.get('mode', 'min')   # 'min' ou 'max'
 
     if not source or not target:
         return jsonify({'error': 'Source et cible requises'}), 400
     if not isinstance(arcs, list) or len(arcs) == 0:
         return jsonify({'error': 'Au moins un arc requis'}), 400
+    if mode not in ('min', 'max'):
+        return jsonify({'error': 'Mode invalide (doit être "min" ou "max")'}), 400
 
     # Validation simple des arcs
     for a in arcs:
@@ -33,7 +36,10 @@ def solve():
     edges = [(a['from'], a['to'], a['weight']) for a in arcs]
 
     try:
-        dist, paths = ford_minimisation(vertices, edges, source, target)
+        if mode == 'max':
+            dist, paths = ford_maximisation(vertices, edges, source, target)
+        else:
+            dist, paths = ford_minimisation(vertices, edges, source, target)
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 

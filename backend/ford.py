@@ -39,7 +39,6 @@ def ford_minimisation(vertices, arcs, source, cible, ordre=None):
                 pred[v] = [u]
                 change = True
                 if i > j:
-                    # Recommencer à partir de j selon la règle de Ford
                     break
             elif dist[u] + w == dist[v] and u not in pred[v]:
                 pred[v].append(u)
@@ -47,10 +46,10 @@ def ford_minimisation(vertices, arcs, source, cible, ordre=None):
             continue
         # break déclenché, on relance la boucle while
 
-    # Détection de cycle absorbant
+    # Détection de cycle absorbant (cycle négatif)
     for u, v, w in arcs:
         if dist[u] + w < dist[v]:
-            raise Exception("Cycle absorbant détecté")
+            raise Exception("Cycle absorbant (négatif) détecté")
 
     def construire_chemins(courant):
         if courant == source:
@@ -66,6 +65,70 @@ def ford_minimisation(vertices, arcs, source, cible, ordre=None):
     tous_chemins = construire_chemins(cible)
     return dist, tous_chemins
 
+
+def ford_maximisation(vertices, arcs, source, cible, ordre=None):
+    """
+    Algorithme de Ford pour le plus long chemin (maximisation).
+
+    Args:
+        vertices: Liste des noms des sommets.
+        arcs: Liste de tuples (u, v, poids).
+        source: Sommet de départ.
+        cible: Sommet d'arrivée.
+        ordre: Ordre facultatif des sommets.
+
+    Returns:
+        dist: Dictionnaire {sommet: valeur maximale} depuis la source.
+        chemins: Liste des chemins optimaux de la source à la cible.
+    """
+    if ordre is None:
+        ordre = list(vertices)
+
+    index_of = {v: i for i, v in enumerate(ordre)}
+
+    # Initialisation : tous les λ à 0 (conformément au cours)
+    dist = {v: 0 for v in vertices}
+    pred = defaultdict(list)
+
+    change = True
+    while change:
+        change = False
+        arcs_tries = sorted(arcs, key=lambda e: (index_of[e[0]], index_of[e[1]]))
+        for u, v, w in arcs_tries:
+            i, j = index_of[u], index_of[v]
+            # Condition : λj - λi < v(xi,xj)  →  λj < λi + w
+            if dist[u] + w > dist[v]:
+                dist[v] = dist[u] + w
+                pred[v] = [u]
+                change = True
+                if i > j:
+                    break
+            elif dist[u] + w == dist[v] and u not in pred[v]:
+                pred[v].append(u)
+        else:
+            continue
+        # break déclenché, on relance
+
+    # Détection de cycle absorbant (cycle positif)
+    for u, v, w in arcs:
+        if dist[u] + w > dist[v]:
+            raise Exception("Cycle absorbant (positif) détecté - pas de plus long chemin fini")
+
+    def construire_chemins(courant):
+        if courant == source:
+            return [[source]]
+        if courant not in pred or not pred[courant]:
+            return []
+        chemins = []
+        for p in pred[courant]:
+            for sous_chemin in construire_chemins(p):
+                chemins.append(sous_chemin + [courant])
+        return chemins
+
+    tous_chemins = construire_chemins(cible)
+    return dist, tous_chemins
+
+
 def cle_tri(v):
     """Fonction de tri des sommets par suffixe numérique si présent."""
     if isinstance(v, int):
@@ -76,12 +139,17 @@ def cle_tri(v):
             return int(match.group(1))
     return v
 
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python ford.py graphe.json")
+        print("Usage: python ford.py graphe.json [--mode min|max]")
         sys.exit(1)
 
     nom_fichier = sys.argv[1]
+    mode = "min"
+    if len(sys.argv) >= 3 and sys.argv[2] == "--mode" and len(sys.argv) >= 4:
+        mode = sys.argv[3] if sys.argv[3] in ("min", "max") else "min"
+
     with open(nom_fichier, 'r') as f:
         donnees = json.load(f)
 
@@ -95,9 +163,13 @@ if __name__ == "__main__":
         sommets.add(v)
     sommets = list(sommets)
 
-    distances, chemins = ford_minimisation(sommets, arcs, source, cible)
+    if mode == "max":
+        distances, chemins = ford_maximisation(sommets, arcs, source, cible)
+        print("Valeurs maximales (plus long chemin) :")
+    else:
+        distances, chemins = ford_minimisation(sommets, arcs, source, cible)
+        print("Distances minimales :")
 
-    print("Distances minimales :")
     for v in sorted(sommets, key=cle_tri):
         print(f"{v}: {distances[v]}")
     print(f"\nChemin(s) optimal(aux) de {source} à {cible} (poids {distances[cible]}) :")
