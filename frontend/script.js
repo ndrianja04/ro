@@ -2,7 +2,8 @@
 let arcs = [];
 let cy = null;
 let currentPaths = [];
-let solveTimeout = null;          // pour le debounce
+let solveTimeout = null;
+let currentMode = 'min';   // 'min' ou 'max'
 
 // ---------- Fonctions de mise à jour du tableau HTML ----------
 function updateTable() {
@@ -15,7 +16,7 @@ function updateTable() {
         row.insertCell(2).innerHTML = `<input type="number" value="${arc.weight}" data-index="${idx}" data-field="weight" step="any" class="edge-input">`;
         const delCell = row.insertCell(3);
         const delBtn = document.createElement('button');
-        delBtn.textContent = 'X';
+        delBtn.textContent = '✖';
         delBtn.className = 'delete-edge-btn';
         delBtn.style.background = '#fee2e2';
         delBtn.style.border = 'none';
@@ -26,7 +27,7 @@ function updateTable() {
             arcs.splice(idx, 1);
             updateTable();
             updateGraphVisualization();
-            autoSolve();              // auto-recalcul
+            autoSolve();
         };
         delCell.appendChild(delBtn);
     });
@@ -60,7 +61,7 @@ function handleInputChange(e) {
     }
     arcs[idx][field] = value;
     updateGraphVisualization();
-    autoSolve();                     // auto-recalcul
+    autoSolve();
 }
 
 // ---------- Gestion de la liste des sommets ----------
@@ -84,7 +85,7 @@ function updateVerticesList() {
     vertices.forEach(v => {
         const div = document.createElement('div');
         div.className = 'vertex-item';
-        div.innerHTML = `${v} <button class="delete-vertex-btn" data-vertex="${v}">x</button>`;
+        div.innerHTML = `${v} <button class="delete-vertex-btn" data-vertex="${v}">✖</button>`;
         container.appendChild(div);
     });
     document.querySelectorAll('.delete-vertex-btn').forEach(btn => {
@@ -106,7 +107,7 @@ function handleDeleteVertex(e) {
         updateGraphVisualization();
         currentPaths = [];
         document.getElementById('result').innerText = 'Graphe modifié. Recalcul en cours...';
-        autoSolve();                     // auto-recalcul
+        autoSolve();
     }
 }
 
@@ -220,7 +221,7 @@ function updateGraphVisualization() {
             highlightPaths(currentPaths);
         }
 
-        updateVerticesList();   // mise à jour de la liste des sommets
+        updateVerticesList();
 }
 
 function highlightPaths(paths) {
@@ -236,7 +237,7 @@ function highlightPaths(paths) {
     }
 }
 
-// ---------- Auto-recalcul (debounce) ----------
+// ---------- Auto-recalcul avec debounce ----------
 function autoSolve() {
     if (solveTimeout) clearTimeout(solveTimeout);
     solveTimeout = setTimeout(() => {
@@ -245,12 +246,11 @@ function autoSolve() {
     }, 300);
 }
 
-// ---------- Appel API (calcul du plus court chemin) ----------
+// ---------- Appel API avec mode ----------
 async function solve() {
     const source = document.getElementById('source').value.trim();
     const target = document.getElementById('target').value.trim();
     if (!source || !target) {
-        // On n'affiche pas d'alerte en auto, on efface juste le résultat
         document.getElementById('result').innerText = 'Veuillez renseigner départ et arrivée.';
         return;
     }
@@ -264,7 +264,7 @@ async function solve() {
         return;
     }
 
-    const payload = { source, target, arcs: validArcs };
+    const payload = { source, target, arcs: validArcs, mode: currentMode };
     try {
         const response = await fetch('/api/solve', {
             method: 'POST',
@@ -278,8 +278,8 @@ async function solve() {
         }
 
         const distances = data.distances;
-
-        let resultText = `Distances minimales depuis ${source} :\n`;
+        const title = currentMode === 'max' ? 'Valeurs maximales' : 'Distances minimales';
+        let resultText = `${title} depuis ${source} :\n`;
         const sortedKeys = Object.keys(distances).sort((a, b) => {
             const numA = parseInt(a.match(/\d+$/)?.[0] || a);
             const numB = parseInt(b.match(/\d+$/)?.[0] || b);
@@ -310,17 +310,15 @@ async function solve() {
     }
 }
 
-// ---------- Export Excel ----------
+// ---------- Export / Import Excel ----------
 function exportToExcel() {
     const source = document.getElementById('source').value.trim();
     const target = document.getElementById('target').value.trim();
     const validArcs = arcs.filter(a => a.from && a.to && a.weight !== undefined && a.from.trim() !== '' && a.to.trim() !== '');
-
     if (validArcs.length === 0) {
-        alert("Aucun arc valide à exporter. Veuillez ajouter des arcs avant d'exporter.");
+        alert("Aucun arc valide à exporter.");
         return;
     }
-
     const data = [];
     data.push(["Départ", source]);
     data.push(["Arrivée", target]);
@@ -329,14 +327,12 @@ function exportToExcel() {
     validArcs.forEach(arc => {
         data.push([arc.from.trim(), arc.to.trim(), arc.weight]);
     });
-
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Graphe");
     XLSX.writeFile(wb, "graphe.xlsx");
 }
 
-// ---------- Import Excel ----------
 function importFromExcel(file) {
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -344,11 +340,9 @@ function importFromExcel(file) {
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
-
         let source = null;
         let target = null;
         const arcsData = [];
-
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             if (!row || row.length < 2) continue;
@@ -371,7 +365,6 @@ function importFromExcel(file) {
                 break;
             }
         }
-
         if (source) document.getElementById('source').value = source;
         if (target) document.getElementById('target').value = target;
         if (arcsData.length > 0) {
@@ -380,15 +373,15 @@ function importFromExcel(file) {
             updateGraphVisualization();
             document.getElementById('result').innerText = 'Graphe importé. Calcul automatique...';
             currentPaths = [];
-            autoSolve();                     // auto-recalcul
+            autoSolve();
         } else {
-            alert("Aucun arc valide trouvé dans le fichier Excel.");
+            alert("Aucun arc valide trouvé.");
         }
     };
     reader.readAsArrayBuffer(file);
 }
 
-// ---------- Exemples prédéfinis ----------
+// ---------- Exemples ----------
 function loadExample(exampleName) {
     let graphData;
     if (exampleName === 'graph1') {
@@ -438,9 +431,9 @@ function loadExample(exampleName) {
     arcs = graphData.arcs.map(a => ({ from: a.from, to: a.to, weight: a.weight }));
     updateTable();
     updateGraphVisualization();
-    document.getElementById('result').innerText = `Exemple ${exampleName === 'graph1' ? '1' : '2'} chargé. Calcul automatique...`;
+    document.getElementById('result').innerText = `Exemple chargé. Calcul automatique...`;
     currentPaths = [];
-    autoSolve();                     // auto-recalcul
+    autoSolve();
 }
 
 // ---------- Utilitaires ----------
@@ -448,13 +441,11 @@ function clearAll() {
     arcs = [];
     currentPaths = [];
     updateTable();
-    if (cy) {
-        cy.elements().remove();
-    }
+    if (cy) cy.elements().remove();
     document.getElementById('source').value = '';
     document.getElementById('target').value = '';
     document.getElementById('result').innerText = 'Aucun calcul effectué.';
-    updateVerticesList(); // vide la liste
+    updateVerticesList();
 }
 
 function copyResult() {
@@ -462,7 +453,7 @@ function copyResult() {
     navigator.clipboard.writeText(resultText).then(() => {
         const btn = document.getElementById('copy-result');
         const original = btn.innerHTML;
-        btn.innerHTML = '✓';
+        btn.innerHTML = 'Copié';
         setTimeout(() => btn.innerHTML = original, 1000);
     });
 }
@@ -477,7 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
         arcs.push({ from: '', to: '', weight: 1 });
         updateTable();
         updateGraphVisualization();
-        autoSolve();                     // auto-recalcul
+        autoSolve();
     };
     document.getElementById('clear-graph').onclick = clearAll;
     document.getElementById('fit-graph').onclick = () => cy && cy.fit();
@@ -488,8 +479,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     document.getElementById('copy-result').onclick = copyResult;
+    document.getElementById('export-excel').onclick = exportToExcel;
+    document.getElementById('import-excel').onchange = (e) => {
+        if (e.target.files.length > 0) importFromExcel(e.target.files[0]);
+        e.target.value = '';
+    };
+    document.getElementById('load-graph1').onclick = () => loadExample('graph1');
+    document.getElementById('load-graph2').onclick = () => loadExample('graph2');
 
-    // Événements source / target avec auto-recalcul
+    // Mode min / max
+    document.getElementById('mode-min').onclick = () => {
+        currentMode = 'min';
+        document.getElementById('mode-min').classList.add('active');
+        document.getElementById('mode-max').classList.remove('active');
+        autoSolve();
+    };
+    document.getElementById('mode-max').onclick = () => {
+        currentMode = 'max';
+        document.getElementById('mode-max').classList.add('active');
+        document.getElementById('mode-min').classList.remove('active');
+        autoSolve();
+    };
+
     document.getElementById('source').addEventListener('change', () => {
         updateGraphVisualization();
         autoSolve();
@@ -498,12 +509,4 @@ document.addEventListener('DOMContentLoaded', () => {
         updateGraphVisualization();
         autoSolve();
     });
-
-    document.getElementById('export-excel').onclick = exportToExcel;
-    document.getElementById('import-excel').onchange = (e) => {
-        if (e.target.files.length > 0) importFromExcel(e.target.files[0]);
-        e.target.value = '';
-    };
-    document.getElementById('load-graph1').onclick = () => loadExample('graph1');
-    document.getElementById('load-graph2').onclick = () => loadExample('graph2');
 });

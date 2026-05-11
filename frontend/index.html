@@ -3,17 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Fordmin – Plus court chemin</title>
+    <title>Fordmin – Plus court / plus long chemin</title>
     <link rel="stylesheet" href="style.css">
     <script src="lib/cytoscape.min.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <script src="lib/xlsx.full.min.js"></script>
 </head>
 <body>
 <div class="app">
     <div class="sidebar">
         <div class="sidebar-header">
-            <h1>Ford<span>min</span></h1>
-            <p class="subtitle">Algorithme de Ford (minimisation)</p>
+            <h1>Algorithme de <span>Ford</span></h1>
+            <p class="subtitle">(Minimisation / Maximisation)</p>
+        </div>
+
+        <!-- Mode de calcul -->
+        <div class="section">
+            <div class="section-title">Mode de calcul</div>
+            <div class="button-row">
+                <button id="mode-min" class="btn btn-secondary mode-btn active">Minimisation</button>
+                <button id="mode-max" class="btn btn-secondary mode-btn">Maximisation</button>
+            </div>
         </div>
 
         <div class="field-group">
@@ -52,18 +61,14 @@
             </div>
         </div>
 
-        <!-- Section Sommets -->
         <div class="section">
             <div class="section-title">
                 <span>Sommets</span>
             </div>
-            <div id="vertices-list" class="vertices-list">
-                <!-- Liste dynamique des sommets -->
+            <div id="vertices-list" class="vertices-list"></div>
+            <div class="button-row">
+                <button class="btn btn-outline" id="clear-graph">Effacer tout</button>
             </div>
-        </div>
-
-        <div class="button-row">
-            <button class="btn btn-secondary" id="clear-graph">Effacer tout</button>
         </div>
 
         <div class="result-panel">
@@ -71,7 +76,7 @@
                 <span>Résultats</span>
                 <button class="btn-copy" id="copy-result" title="Copier">Copier</button>
             </div>
-            <pre id="result" data-placeholder="Aucun calcul effectué."></pre>
+            <pre id="result"></pre>
         </div>
 
         <div class="section">
