@@ -5,19 +5,23 @@ Application web de recherche opérationnelle implémentant l'algorithme de Ford 
 
 ## Fonctionnalités
 
-- Calcul du plus court chemin entre deux sommets
-- Détection des cycles absorbants
-- Affichage de tous les chemins optimaux (si multiples)
-- Visualisation interactive du graphe avec Cytoscape.js
-- Import/Export de graphes au format Excel
-- Exemples intégrés
-- Interface responsive
+- **Calcul automatique** : à chaque modification (ajout/suppression d’arc, changement de poids, suppression de sommet, changement de mode), le chemin optimal est recalculé instantanément.
+- **Minimisation / Maximisation** : bascule entre la recherche du plus court chemin et du plus long chemin (sans cycle absorbant).
+- **Détection des cycles absorbants** (cycles négatifs pour la minimisation, cycles positifs pour la maximisation).
+- **Affichage de tous les chemins optimaux** si plusieurs existent.
+- **Gestion des arcs et des sommets** :
+  - Ajout / suppression d’arcs via un tableau éditable.
+  - Suppression d’un sommet (et de tous ses arcs associés) via une liste cliquable.
+- **Import / Export au format Excel (XLSX)** : structure simple (deux premières lignes pour la source et la cible, puis tableau des arcs).
+- **Visualisation interactive** avec Cytoscape.js (nœuds déplaçables, zoom, surlignage du chemin optimal).
+- **Exemples intégrés** (graphe du cours et petit graphe de test).
+- **Interface responsive** et entièrement hors ligne (bibliothèques locales).
 
 ## Stack technique
 
-- **Backend** : Flask (Python)
-- **Frontend** : HTML/CSS/JS, Cytoscape.js
-- **Conteneurisation** : Docker & Docker Compose
+- **Backend** : Flask (Python) avec l’implémentation maison de l’algorithme de Ford (minimisation et maximisation).
+- **Frontend** : HTML/CSS/JS, Cytoscape.js, SheetJS (XLSX).
+- **Conteneurisation** : Docker & Docker Compose.
 
 ## Prérequis
 
@@ -30,7 +34,7 @@ Application web de recherche opérationnelle implémentant l'algorithme de Ford 
 
 ```bash
 git clone https://github.com/ndrianja04/ro.git
-cd fordmin
+cd ro
 ```
 
 2. Construire et lancer les conteneurs
@@ -44,29 +48,42 @@ docker compose up
 
 Ouvrir un navigateur à l'adresse : http://localhost:8080
 
-Utilisation
+## Utilisation
 
-Saisie manuelle d'un graphe
+### Saisie manuelle d'un graphe
 
-1. Renseigner les sommets de départ et d'arrivée
-2. Ajouter des arcs avec le bouton +
-3. Pour chaque arc, indiquer : départ, arrivée, poids
-4. Cliquer sur Calculer le chemin
+1. Choisir le mode de calcul (Minimisation / Maximisation).
+2. Renseigner les sommets de départ et d’arrivée.
+3. Ajouter des arcs avec le bouton +. Pour chaque arc, saisir : départ, arrivée, poids.
+4. Le chemin optimal se calcule automatiquement et s’affiche dans la zone des résultats. Les arcs empruntés sont surlignés en orange dans le graphe.
 
+### Suppression d'un sommet
 
-Exemples intégrés
+- La liste de tous les sommets du graphe apparaît dans la sidebar.
+- Cliquer sur la croix (×) à côté d’un sommet pour le supprimer, ainsi que tous les arcs qui y sont liés. Le calcul se relance automatiquement.
 
-· Exemple 1 : graphe du cours (X1 à X16)
-· Exemple 2 : petit graphe de test (A à D)
+### Import / Export Excel
 
-Visualisation
+- Importer : cliquer sur Importer Excel et sélectionner un fichier .xlsx. Le fichier doit contenir :
+    - Ligne 1 : Départ | valeur_départ
+    - Ligne 2 : Arrivée | valeur_arrivée
+    - Ligne 4 : De | Vers | Poids
+    - Lignes suivantes : les arcs.
+- Exporter : cliquer sur Exporter Excel pour télécharger le graphe courant au format .xlsx.
 
-· Les nœuds sont déplaçables
-· Zoom/Pan avec la souris
-· Les arcs du chemin optimal sont surlignés en orange
-· Boutons Ajuster la vue et Réinitialiser layout
+### Exemples intégrés
 
-Structure du projet
+- Exemple 1 : graphe du cours (X1 à X16)
+- Exemple 2 : petit graphe de test (A à D)
+
+### Visualisation
+
+- Les nœuds sont déplaçables.
+- Zoomer / dézoomer avec la molette de la souris ou la fonction « Ajuster la vue ».
+- Le chemin optimal est surligné en orange.
+- Les distances minimales / maximales ne sont pas affichées sur les nœuds (réservé à la zone de résultats), mais la liste complète est disponible dans la sidebar.
+
+### Structure du projet
 
 ```
 ├── backend/
@@ -85,7 +102,7 @@ Structure du projet
 └── docker-compose.yml
 ```
 
-Arrêt de l'application
+### Arrêt de l'application
 
 ```bash
 docker compose down
