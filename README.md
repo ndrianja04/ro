@@ -1,7 +1,7 @@
 
-# Fordmin - Algorithme de Ford pour le plus court chemin
+# Algorithme de Ford pour le plus court ou le plus long chemin
 
-Application web de recherche opérationnelle implémentant l'algorithme de Ford (minimisation) pour trouver le plus court chemin dans un graphe orienté pondéré.
+Application web de recherche opérationnelle implémentant l'algorithme de Ford pour trouver le plus court ou le plus long chemin dans un graphe orienté pondéré.
 
 ## Fonctionnalités
 
