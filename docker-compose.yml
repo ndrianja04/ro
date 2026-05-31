@@ -1,18 +1,18 @@
-#version: '3.8'
-
 services:
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./backend:/app
     environment:
-      - FLASK_ENV=development
+      - FLASK_ENV=production
     networks:
       - ford-network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import socket; s=socket.socket(); s.connect((\"localhost\",5000)); s.close()'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   frontend:
     build:
@@ -21,7 +21,8 @@ services:
     ports:
       - "8080:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - ford-network
 

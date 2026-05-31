@@ -44,7 +44,10 @@ def solve():
         return jsonify({'error': str(e)}), 400
 
     # Convertir les distances en valeurs JSON (math.inf -> null)
-    dist_json = {v: (None if d == float('inf') else d) for v, d in dist.items()}
+    dist_json = {
+        v: (None if d in (float('inf'), float('-inf')) else d)
+        for v, d in dist.items()
+    }
     return jsonify({'distances': dist_json, 'paths': paths})
 
 if __name__ == '__main__':

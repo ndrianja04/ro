@@ -4,20 +4,59 @@ import math
 import re
 from collections import defaultdict
 
+
+def _construire_chemins(cible, source, pred):
+    """
+    Reconstruction itérative de tous les chemins optimaux de source à cible.
+    Remplace la version récursive pour éviter les RecursionError sur grands graphes
+    et les boucles infinies en cas de cycles dans pred (ex: arcs de poids nul).
+
+    Args:
+        cible:  Sommet d'arrivée.
+        source: Sommet de départ.
+        pred:   Dictionnaire des prédécesseurs {sommet: [prédécesseurs]}.
+
+    Returns:
+        Liste de chemins [[source, ..., cible], ...].
+    """
+    if cible == source:
+        return [[source]]
+
+    results = []
+    # Pile : (nœud courant, chemin à rebours depuis cible, nœuds visités)
+    stack = [(cible, [cible], {cible})]
+
+    while stack:
+        current, path_back, visited = stack.pop()
+
+        if current == source:
+            results.append(list(reversed(path_back)))
+            continue
+
+        if current not in pred or not pred[current]:
+            continue  # nœud non atteignable depuis source
+
+        for p in pred[current]:
+            if p not in visited:  # évite les cycles dans pred
+                stack.append((p, path_back + [p], visited | {p}))
+
+    return results
+
+
 def ford_minimisation(vertices, arcs, source, cible, ordre=None):
     """
     Algorithme de Ford pour le plus court chemin (minimisation).
 
     Args:
         vertices: Liste des noms des sommets.
-        arcs: Liste de tuples (u, v, poids).
-        source: Sommet de départ.
-        cible: Sommet d'arrivée (utilisé pour la reconstruction).
-        ordre: Ordre facultatif des sommets. Par défaut, utilise l'ordre de la liste vertices.
+        arcs:     Liste de tuples (u, v, poids).
+        source:   Sommet de départ.
+        cible:    Sommet d'arrivée.
+        ordre:    Ordre facultatif des sommets.
 
     Returns:
-        dist: Dictionnaire {sommet: distance} depuis la source.
-        chemins: Liste des chemins optimaux de la source à la cible.
+        dist:    Dictionnaire {sommet: distance minimale depuis source}.
+        chemins: Liste des chemins optimaux de source à cible.
     """
     if ordre is None:
         ordre = list(vertices)
@@ -44,26 +83,14 @@ def ford_minimisation(vertices, arcs, source, cible, ordre=None):
                 pred[v].append(u)
         else:
             continue
-        # break déclenché, on relance la boucle while
+        # break déclenché sur arc rétrograde → relance la boucle while
 
-    # Détection de cycle absorbant (cycle négatif)
+    # Détection de cycle absorbant (négatif)
     for u, v, w in arcs:
         if dist[u] + w < dist[v]:
             raise Exception("Cycle absorbant (négatif) détecté")
 
-    def construire_chemins(courant):
-        if courant == source:
-            return [[source]]
-        if courant not in pred or not pred[courant]:
-            return []
-        chemins = []
-        for p in pred[courant]:
-            for sous_chemin in construire_chemins(p):
-                chemins.append(sous_chemin + [courant])
-        return chemins
-
-    tous_chemins = construire_chemins(cible)
-    return dist, tous_chemins
+    return dist, _construire_chemins(cible, source, pred)
 
 
 def ford_maximisation(vertices, arcs, source, cible, ordre=None):
@@ -72,23 +99,26 @@ def ford_maximisation(vertices, arcs, source, cible, ordre=None):
 
     Args:
         vertices: Liste des noms des sommets.
-        arcs: Liste de tuples (u, v, poids).
-        source: Sommet de départ.
-        cible: Sommet d'arrivée.
-        ordre: Ordre facultatif des sommets.
+        arcs:     Liste de tuples (u, v, poids).
+        source:   Sommet de départ.
+        cible:    Sommet d'arrivée.
+        ordre:    Ordre facultatif des sommets.
 
     Returns:
-        dist: Dictionnaire {sommet: valeur maximale} depuis la source.
-        chemins: Liste des chemins optimaux de la source à la cible.
+        dist:    Dictionnaire {sommet: valeur maximale depuis source}.
+        chemins: Liste des chemins optimaux de source à cible.
     """
     if ordre is None:
         ordre = list(vertices)
 
     index_of = {v: i for i, v in enumerate(ordre)}
 
-    # Initialisation : tous les λ à 0 (conformément au cours)
-    dist = {v: 0 for v in vertices}
+    # CORRECTION : -inf pour tous les sommets, 0 pour la source uniquement.
+    # L'ancienne init à 0 pour tous donnait des valeurs incorrectes (0 au lieu
+    # de -inf) pour les sommets non atteignables depuis la source.
+    dist = {v: -math.inf for v in vertices}
     pred = defaultdict(list)
+    dist[source] = 0
 
     change = True
     while change:
@@ -96,7 +126,9 @@ def ford_maximisation(vertices, arcs, source, cible, ordre=None):
         arcs_tries = sorted(arcs, key=lambda e: (index_of[e[0]], index_of[e[1]]))
         for u, v, w in arcs_tries:
             i, j = index_of[u], index_of[v]
-            # Condition : λj - λi < v(xi,xj)  →  λj < λi + w
+            # Garde : on ne propage pas depuis un sommet non atteignable
+            if dist[u] == -math.inf:
+                continue
             if dist[u] + w > dist[v]:
                 dist[v] = dist[u] + w
                 pred[v] = [u]
@@ -107,30 +139,18 @@ def ford_maximisation(vertices, arcs, source, cible, ordre=None):
                 pred[v].append(u)
         else:
             continue
-        # break déclenché, on relance
+        # break déclenché sur arc rétrograde → relance la boucle while
 
-    # Détection de cycle absorbant (cycle positif)
+    # Détection de cycle absorbant (positif)
     for u, v, w in arcs:
-        if dist[u] + w > dist[v]:
+        if dist[u] != -math.inf and dist[u] + w > dist[v]:
             raise Exception("Cycle absorbant (positif) détecté - pas de plus long chemin fini")
 
-    def construire_chemins(courant):
-        if courant == source:
-            return [[source]]
-        if courant not in pred or not pred[courant]:
-            return []
-        chemins = []
-        for p in pred[courant]:
-            for sous_chemin in construire_chemins(p):
-                chemins.append(sous_chemin + [courant])
-        return chemins
-
-    tous_chemins = construire_chemins(cible)
-    return dist, tous_chemins
+    return dist, _construire_chemins(cible, source, pred)
 
 
 def cle_tri(v):
-    """Fonction de tri des sommets par suffixe numérique si présent."""
+    """Tri des sommets par suffixe numérique si présent."""
     if isinstance(v, int):
         return v
     if isinstance(v, str):
@@ -147,15 +167,15 @@ if __name__ == "__main__":
 
     nom_fichier = sys.argv[1]
     mode = "min"
-    if len(sys.argv) >= 3 and sys.argv[2] == "--mode" and len(sys.argv) >= 4:
+    if len(sys.argv) >= 4 and sys.argv[2] == "--mode":
         mode = sys.argv[3] if sys.argv[3] in ("min", "max") else "min"
 
     with open(nom_fichier, 'r') as f:
         donnees = json.load(f)
 
     source = donnees["source"]
-    cible = donnees["target"]
-    arcs = [(a["from"], a["to"], a["weight"]) for a in donnees["arcs"]]
+    cible  = donnees["target"]
+    arcs   = [(a["from"], a["to"], a["weight"]) for a in donnees["arcs"]]
 
     sommets = set()
     for u, v, _ in arcs:
@@ -171,7 +191,15 @@ if __name__ == "__main__":
         print("Distances minimales :")
 
     for v in sorted(sommets, key=cle_tri):
-        print(f"{v}: {distances[v]}")
+        d = distances[v]
+        if d == math.inf:
+            label = "∞"
+        elif d == -math.inf:
+            label = "-∞"
+        else:
+            label = str(d)
+        print(f"{v}: {label}")
+
     print(f"\nChemin(s) optimal(aux) de {source} à {cible} (poids {distances[cible]}) :")
     for chemin in chemins:
         print(" -> ".join(chemin))

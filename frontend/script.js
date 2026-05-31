@@ -36,11 +36,14 @@ function updateTable() {
 
 function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/[&<>]/g, function(m) {
-        if (m === '&') return '&amp;';
-        if (m === '<') return '&lt;';
-        if (m === '>') return '&gt;';
-        return m;
+    return str.replace(/[&<>"']/g, function(m) {
+        switch (m) {
+            case '&':  return '&amp;';
+            case '<':  return '&lt;';
+            case '>':  return '&gt;';
+            case '"':  return '&quot;';
+            case "'":  return '&#39;';
+        }
     });
 }
 
@@ -74,9 +77,7 @@ function updateVerticesList() {
         const vertices = Array.from(verticesSet).sort((a, b) => {
             const numA = parseInt(a.match(/\d+$/)?.[0] || a);
             const numB = parseInt(b.match(/\d+$/)?.[0] || b);
-            if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
-                return numA - numB;
-            }
+            if (!isNaN(numA) && !isNaN(numB) && numA !== numB) return numA - numB;
             return a.localeCompare(b);
         });
         const container = document.getElementById('vertices-list');
@@ -85,7 +86,7 @@ function updateVerticesList() {
     vertices.forEach(v => {
         const div = document.createElement('div');
         div.className = 'vertex-item';
-        div.innerHTML = `${v} <button class="delete-vertex-btn" data-vertex="${v}">✖</button>`;
+        div.innerHTML = `${v} <button class="delete-vertex-btn" data-vertex="${escapeHtml(v)}">✖</button>`;
         container.appendChild(div);
     });
     document.querySelectorAll('.delete-vertex-btn').forEach(btn => {
@@ -173,18 +174,19 @@ function initCytoscape() {
                 }
             }
         ],
-        layout: {
-            name: 'cose',
-            animate: false,
-            idealEdgeLength: 100,
-            nodeRepulsion: 4000,
-            gravity: 0.1
-        }
+        layout: { name: 'preset' }   // Pas de layout automatique à l'init
     });
     return cy;
 }
 
-function updateGraphVisualization() {
+/**
+ * Met à jour le graphe Cytoscape sans relancer le layout systématiquement.
+ *
+ * @param {boolean} forceLayout - true pour forcer un recalcul complet du layout
+ *   (import, chargement d'exemple). false par défaut : les positions existantes
+ *   sont restaurées et le layout ne s'exécute que si de nouveaux nœuds sont apparus.
+ */
+function updateGraphVisualization(forceLayout = false) {
     if (!cy) return;
 
     const nodesSet = new Set();
@@ -196,26 +198,45 @@ function updateGraphVisualization() {
         const sourceVal = document.getElementById('source').value.trim();
         const targetVal = document.getElementById('target').value.trim();
 
+        // 1. Sauvegarder les positions des nœuds actuels avant de tout effacer
+        const savedPositions = {};
+        cy.nodes().forEach(n => {
+            savedPositions[n.id()] = { ...n.position() };
+        });
+
+        // 2. Détecter si de nouveaux nœuds (sans position connue) apparaissent
+        const hasNewNodes = Array.from(nodesSet).some(id => !(id in savedPositions));
+
+        // 3. Reconstruire les éléments
         const nodes = Array.from(nodesSet).map(id => {
             let classes = '';
             if (id === sourceVal) classes = 'source';
             if (id === targetVal) classes = 'target';
-            return { data: { id: id, label: id }, classes: classes };
+            return { data: { id, label: id }, classes };
         });
 
         const edges = arcs.map((arc, idx) => {
             const fromId = arc.from.trim();
-            const toId = arc.to.trim();
-            if (fromId === '' || toId === '') return null;
-            return { data: { id: `e${idx}`, source: fromId, target: toId, weight: arc.weight }, classes: '' };
-        }).filter(e => e !== null);
+            const toId   = arc.to.trim();
+            if (!fromId || !toId) return null;
+            return { data: { id: `e${idx}`, source: fromId, target: toId, weight: arc.weight } };
+        }).filter(Boolean);
 
         cy.elements().remove();
         cy.add(nodes);
         cy.add(edges);
 
-        const layout = cy.layout({ name: 'cose', animate: false });
-        layout.run();
+        // 4. Décider si on relance le layout ou si on restaure les positions
+        if (forceLayout || hasNewNodes) {
+            cy.layout({ name: 'cose', animate: false, idealEdgeLength: 100, nodeRepulsion: 4000, gravity: 0.1 }).run();
+        } else {
+            // Restaurer les positions connues — les nœuds ne bougent pas
+            cy.nodes().forEach(n => {
+                if (savedPositions[n.id()]) {
+                    n.position(savedPositions[n.id()]);
+                }
+            });
+        }
 
         if (currentPaths.length > 0) {
             highlightPaths(currentPaths);
@@ -229,10 +250,9 @@ function highlightPaths(paths) {
     cy.edges().removeClass('optimal');
     for (const path of paths) {
         for (let i = 0; i < path.length - 1; i++) {
-            const fromNode = path[i];
-            const toNode = path[i+1];
-            const edge = cy.edges().filter(e => e.data('source') === fromNode && e.data('target') === toNode);
-            edge.addClass('optimal');
+            cy.edges()
+            .filter(e => e.data('source') === path[i] && e.data('target') === path[i + 1])
+            .addClass('optimal');
         }
     }
 }
@@ -246,10 +266,11 @@ function autoSolve() {
     }, 300);
 }
 
-// ---------- Appel API avec mode ----------
+// ---------- Appel API ----------
 async function solve() {
     const source = document.getElementById('source').value.trim();
     const target = document.getElementById('target').value.trim();
+
     if (!source || !target) {
         document.getElementById('result').innerText = 'Veuillez renseigner départ et arrivée.';
         return;
@@ -258,124 +279,133 @@ async function solve() {
         document.getElementById('result').innerText = 'Aucun arc. Ajoutez des arcs.';
         return;
     }
-    const validArcs = arcs.filter(a => a.from && a.to && a.weight !== undefined && a.from.trim() !== '' && a.to.trim() !== '');
+
+    const validArcs = arcs.filter(a =>
+    a.from && a.to && a.weight !== undefined &&
+    a.from.trim() !== '' && a.to.trim() !== ''
+    );
     if (validArcs.length === 0) {
         document.getElementById('result').innerText = 'Aucun arc valide.';
         return;
     }
 
-    const payload = { source, target, arcs: validArcs, mode: currentMode };
     try {
         const response = await fetch('/api/solve', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({ source, target, arcs: validArcs, mode: currentMode })
         });
         const data = await response.json();
+
         if (data.error) {
             document.getElementById('result').innerText = `Erreur : ${data.error}`;
+            currentPaths = [];
+            cy.edges().removeClass('optimal');
             return;
         }
 
-        const distances = data.distances;
-        const title = currentMode === 'max' ? 'Valeurs maximales' : 'Distances minimales';
-        let resultText = `${title} depuis ${source} :\n`;
+        // Affichage des résultats
+        const distances  = data.distances;
+        const title      = currentMode === 'max' ? 'Valeurs maximales' : 'Distances minimales';
+        let resultText   = `${title} depuis ${source} :\n`;
+
         const sortedKeys = Object.keys(distances).sort((a, b) => {
             const numA = parseInt(a.match(/\d+$/)?.[0] || a);
             const numB = parseInt(b.match(/\d+$/)?.[0] || b);
-            if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
-                return numA - numB;
-            }
+            if (!isNaN(numA) && !isNaN(numB) && numA !== numB) return numA - numB;
             return a.localeCompare(b);
         });
+
         for (const v of sortedKeys) {
             const d = distances[v];
             resultText += `${v} : ${d === null ? '∞' : d}\n`;
         }
         resultText += `\nChemin(s) optimal(aux) de ${source} à ${target} (poids ${distances[target]}) :\n`;
-        data.paths.forEach(path => {
-            resultText += path.join(" → ") + "\n";
-        });
+        data.paths.forEach(path => { resultText += path.join(' → ') + '\n'; });
+
         document.getElementById('result').innerText = resultText;
 
+        // Mise en valeur du chemin et des nœuds source/cible
         currentPaths = data.paths;
         highlightPaths(currentPaths);
         cy.nodes().removeClass('source target');
-        if (cy.$id(source)) cy.$id(source).addClass('source');
-        if (cy.$id(target)) cy.$id(target).addClass('target');
+        if (cy.$id(source).length) cy.$id(source).addClass('source');
+        if (cy.$id(target).length) cy.$id(target).addClass('target');
 
     } catch (err) {
         console.error(err);
-        document.getElementById('result').innerText = "Erreur de connexion au serveur.";
+        document.getElementById('result').innerText = 'Erreur de connexion au serveur.';
     }
 }
 
 // ---------- Export / Import Excel ----------
 function exportToExcel() {
-    const source = document.getElementById('source').value.trim();
-    const target = document.getElementById('target').value.trim();
-    const validArcs = arcs.filter(a => a.from && a.to && a.weight !== undefined && a.from.trim() !== '' && a.to.trim() !== '');
+    const source    = document.getElementById('source').value.trim();
+    const target    = document.getElementById('target').value.trim();
+    const validArcs = arcs.filter(a =>
+    a.from && a.to && a.weight !== undefined &&
+    a.from.trim() !== '' && a.to.trim() !== ''
+    );
     if (validArcs.length === 0) {
-        alert("Aucun arc valide à exporter.");
+        alert('Aucun arc valide à exporter.');
         return;
     }
-    const data = [];
-    data.push(["Départ", source]);
-    data.push(["Arrivée", target]);
-    data.push([]);
-    data.push(["De", "Vers", "Poids"]);
-    validArcs.forEach(arc => {
-        data.push([arc.from.trim(), arc.to.trim(), arc.weight]);
-    });
+    const data = [
+        ['Départ', source],
+        ['Arrivée', target],
+        [],
+        ['De', 'Vers', 'Poids'],
+        ...validArcs.map(arc => [arc.from.trim(), arc.to.trim(), arc.weight])
+    ];
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Graphe");
-    XLSX.writeFile(wb, "graphe.xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, 'Graphe');
+    XLSX.writeFile(wb, 'graphe.xlsx');
 }
 
 function importFromExcel(file) {
     const reader = new FileReader();
     reader.onload = function(e) {
-        const data = new Uint8Array(e.target.result);
+        const data     = new Uint8Array(e.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
-        let source = null;
-        let target = null;
+        const sheet    = workbook.Sheets[workbook.SheetNames[0]];
+        const rows     = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+        let source = null, target = null;
         const arcsData = [];
+
         for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
+            const row       = rows[i];
             if (!row || row.length < 2) continue;
-            const firstCell = (row[0] || "").toString().trim();
-            if (firstCell === "Départ") {
-                source = (row[1] || "").toString().trim();
-            } else if (firstCell === "Arrivée") {
-                target = (row[1] || "").toString().trim();
-            } else if (firstCell === "De") {
-                for (let j = i+1; j < rows.length; j++) {
-                    const arcRow = rows[j];
-                    if (!arcRow || arcRow.length < 3) continue;
-                    const from = (arcRow[0] || "").toString().trim();
-                    const to = (arcRow[1] || "").toString().trim();
-                    const weight = parseFloat(arcRow[2]);
-                    if (from !== "" && to !== "" && !isNaN(weight)) {
-                        arcsData.push({ from, to, weight });
-                    }
+            const firstCell = (row[0] || '').toString().trim();
+
+            if (firstCell === 'Départ')       { source = (row[1] || '').toString().trim(); }
+            else if (firstCell === 'Arrivée') { target = (row[1] || '').toString().trim(); }
+            else if (firstCell === 'De') {
+                for (let j = i + 1; j < rows.length; j++) {
+                    const r      = rows[j];
+                    if (!r || r.length < 3) continue;
+                    const from   = (r[0] || '').toString().trim();
+                    const to     = (r[1] || '').toString().trim();
+                    const weight = parseFloat(r[2]);
+                    if (from && to && !isNaN(weight)) arcsData.push({ from, to, weight });
                 }
                 break;
             }
         }
+
         if (source) document.getElementById('source').value = source;
         if (target) document.getElementById('target').value = target;
+
         if (arcsData.length > 0) {
             arcs = arcsData;
             updateTable();
-            updateGraphVisualization();
+            updateGraphVisualization(true);  // forceLayout : graphe entièrement remplacé
             document.getElementById('result').innerText = 'Graphe importé. Calcul automatique...';
             currentPaths = [];
             autoSolve();
         } else {
-            alert("Aucun arc valide trouvé.");
+            alert('Aucun arc valide trouvé.');
         }
     };
     reader.readAsArrayBuffer(file);
@@ -383,55 +413,54 @@ function importFromExcel(file) {
 
 // ---------- Exemples ----------
 function loadExample(exampleName) {
-    let graphData;
-    if (exampleName === 'graph1') {
-        graphData = {
-            source: "X1",
-            target: "X16",
+    const examples = {
+        graph1: {
+            source: 'X1', target: 'X16',
             arcs: [
-                {"from": "X1", "to": "X2", "weight": 10},
-                {"from": "X2", "to": "X3", "weight": 15},
-                {"from": "X2", "to": "X4", "weight": 8},
-                {"from": "X3", "to": "X6", "weight": 1},
-                {"from": "X3", "to": "X11", "weight": 16},
-                {"from": "X4", "to": "X5", "weight": 6},
-                {"from": "X5", "to": "X9", "weight": 1},
-                {"from": "X6", "to": "X7", "weight": 4},
-                {"from": "X7", "to": "X8", "weight": 1},
-                {"from": "X7", "to": "X11", "weight": 8},
-                {"from": "X8", "to": "X10", "weight": 2},
-                {"from": "X9", "to": "X8", "weight": 3},
-                {"from": "X9", "to": "X10", "weight": 4},
-                {"from": "X10", "to": "X12", "weight": 7},
-                {"from": "X11", "to": "X13", "weight": 12},
-                {"from": "X12", "to": "X15", "weight": 9},
-                {"from": "X13", "to": "X14", "weight": 3},
-                {"from": "X14", "to": "X16", "weight": 3},
-                {"from": "X15", "to": "X14", "weight": 5},
-                {"from": "X15", "to": "X16", "weight": 6}
+                { from: 'X1',  to: 'X2',  weight: 10 },
+                { from: 'X2',  to: 'X3',  weight: 15 },
+                { from: 'X2',  to: 'X4',  weight: 8  },
+                { from: 'X3',  to: 'X6',  weight: 1  },
+                { from: 'X3',  to: 'X11', weight: 16 },
+                { from: 'X4',  to: 'X5',  weight: 6  },
+                { from: 'X5',  to: 'X9',  weight: 1  },
+                { from: 'X6',  to: 'X7',  weight: 4  },
+                { from: 'X7',  to: 'X8',  weight: 1  },
+                { from: 'X7',  to: 'X11', weight: 8  },
+                { from: 'X8',  to: 'X10', weight: 2  },
+                { from: 'X9',  to: 'X8',  weight: 3  },
+                { from: 'X9',  to: 'X10', weight: 4  },
+                { from: 'X10', to: 'X12', weight: 7  },
+                { from: 'X11', to: 'X13', weight: 12 },
+                { from: 'X12', to: 'X15', weight: 9  },
+                { from: 'X13', to: 'X14', weight: 3  },
+                { from: 'X14', to: 'X16', weight: 3  },
+                { from: 'X15', to: 'X14', weight: 5  },
+                { from: 'X15', to: 'X16', weight: 6  }
             ]
-        };
-    } else if (exampleName === 'graph2') {
-        graphData = {
-            source: "A",
-            target: "D",
+        },
+        graph2: {
+            source: 'A', target: 'D',
             arcs: [
-                {"from": "A", "to": "B", "weight": 5},
-                {"from": "A", "to": "C", "weight": 2},
-                {"from": "B", "to": "D", "weight": 1},
-                {"from": "C", "to": "B", "weight": 1},
-                {"from": "C", "to": "D", "weight": 4}
+                { from: 'A', to: 'B', weight: 5 },
+                { from: 'A', to: 'C', weight: 2 },
+                { from: 'B', to: 'D', weight: 1 },
+                { from: 'C', to: 'B', weight: 1 },
+                { from: 'C', to: 'D', weight: 4 }
             ]
-        };
-    } else {
-        return;
-    }
+        }
+    };
+
+    const graphData = examples[exampleName];
+    if (!graphData) return;
+
     document.getElementById('source').value = graphData.source;
     document.getElementById('target').value = graphData.target;
-    arcs = graphData.arcs.map(a => ({ from: a.from, to: a.to, weight: a.weight }));
+    arcs = graphData.arcs.map(a => ({ ...a }));
+
     updateTable();
-    updateGraphVisualization();
-    document.getElementById('result').innerText = `Exemple chargé. Calcul automatique...`;
+    updateGraphVisualization(true);  // forceLayout : graphe entièrement remplacé
+    document.getElementById('result').innerText = 'Exemple chargé. Calcul automatique...';
     currentPaths = [];
     autoSolve();
 }
@@ -451,9 +480,9 @@ function clearAll() {
 function copyResult() {
     const resultText = document.getElementById('result').innerText;
     navigator.clipboard.writeText(resultText).then(() => {
-        const btn = document.getElementById('copy-result');
+        const btn      = document.getElementById('copy-result');
         const original = btn.innerHTML;
-        btn.innerHTML = 'Copié';
+        btn.innerHTML  = 'Copié';
         setTimeout(() => btn.innerHTML = original, 1000);
     });
 }
@@ -467,20 +496,18 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('add-edge').onclick = () => {
         arcs.push({ from: '', to: '', weight: 1 });
         updateTable();
-        updateGraphVisualization();
+        updateGraphVisualization();   // hasNewNodes détecte les éventuels nouveaux nœuds
         autoSolve();
     };
-    document.getElementById('clear-graph').onclick = clearAll;
-    document.getElementById('fit-graph').onclick = () => cy && cy.fit();
-    document.getElementById('reset-layout').onclick = () => {
-        if (cy) {
-            const layout = cy.layout({ name: 'cose', animate: true });
-            layout.run();
-        }
+
+    document.getElementById('clear-graph').onclick    = clearAll;
+    document.getElementById('fit-graph').onclick      = () => cy && cy.fit();
+    document.getElementById('reset-layout').onclick   = () => {
+        if (cy) cy.layout({ name: 'cose', animate: true, idealEdgeLength: 100, nodeRepulsion: 4000, gravity: 0.1 }).run();
     };
-    document.getElementById('copy-result').onclick = copyResult;
-    document.getElementById('export-excel').onclick = exportToExcel;
-    document.getElementById('import-excel').onchange = (e) => {
+    document.getElementById('copy-result').onclick    = copyResult;
+    document.getElementById('export-excel').onclick   = exportToExcel;
+    document.getElementById('import-excel').onchange  = (e) => {
         if (e.target.files.length > 0) importFromExcel(e.target.files[0]);
         e.target.value = '';
     };
